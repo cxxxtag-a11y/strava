@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FAKE STRAVA</title>
+    <title>Fake My Run - Gerador de GPX</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -44,7 +44,7 @@
                         <path d="M12 2v20" />
                         <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                     </svg>
-                    FAKE STRAVA
+                    Fake My Run
                 </h1>
                 <p class="text-sm text-gray-500 mt-1">Crie rotas falsas e exporte para GPX.</p>
             </div>
@@ -84,6 +84,27 @@
                     <label class="block text-sm font-semibold text-gray-700 mb-1">Nome da Atividade</label>
                     <input type="text" id="activityName" value="Corrida Matinal"
                         class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Descrição do Treino</label>
+                    <textarea id="activityDescription" rows="2" placeholder="Como foi a atividade? (Aparecerá no Strava)"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none"></textarea>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-2 mt-1 mb-2 border-b border-gray-200 pb-4">
+                    <div class="flex items-center">
+                        <input type="checkbox" id="isCommute" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer">
+                        <label for="isCommute" class="ml-2 block text-xs text-gray-700 cursor-pointer">Trajeto (Commute)</label>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="isTrainer" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer">
+                        <label for="isTrainer" class="ml-2 block text-xs text-gray-700 cursor-pointer">Treino Indoor (Rolo)</label>
+                    </div>
+                    <div class="flex items-center col-span-2">
+                        <input type="checkbox" id="hideHR" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer" onchange="document.getElementById('heartRate').disabled = this.checked; document.getElementById('hrVariation').disabled = this.checked; if(this.checked) { document.getElementById('heartRate').classList.add('opacity-50'); } else { document.getElementById('heartRate').classList.remove('opacity-50'); }">
+                        <label for="hideHR" class="ml-2 block text-xs text-gray-700 cursor-pointer">Ocultar Batimentos Cardíacos</label>
+                    </div>
                 </div>
 
                 <div>
@@ -290,19 +311,31 @@
                 let clientId = localStorage.getItem('strava_client_id');
                 let clientSecret = localStorage.getItem('strava_client_secret');
                 
+                const currentDomain = window.location.hostname; // Lê o domínio onde o site está rodando
+
                 if (!clientId || !clientSecret) {
-                    clientId = prompt("Para conectar ao Strava, precisamos do seu 'Client ID' (Obtenha em: strava.com/settings/api):");
-                    if(!clientId) return;
+                    clientId = prompt(`MUITO IMPORTANTE: No painel do Strava (strava.com/settings/api), coloque EXATAMENTE isto no campo "Authorization Callback Domain":\n\n${currentDomain}\n\nAgora, insira aqui o seu 'Client ID':`);
+                    
+                    if(!clientId) return; // Cancelou
+                    
                     clientSecret = prompt("Agora insira o seu 'Client Secret':");
                     if(!clientSecret) return;
                     
-                    localStorage.setItem('strava_client_id', clientId);
-                    localStorage.setItem('strava_client_secret', clientSecret);
+                    localStorage.setItem('strava_client_id', clientId.trim());
+                    localStorage.setItem('strava_client_secret', clientSecret.trim());
                 }
                 
-                const redirectUri = window.location.href.split('?')[0];
+                const redirectUri = encodeURIComponent(window.location.href.split('?')[0]);
                 const authUrl = `https://www.strava.com/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&approval_prompt=force&scope=activity:write,read`;
-                window.location.href = authUrl;
+                
+                // Pergunta se o usuário quer resetar caso a URL dê erro
+                if(confirm("Vamos redirecionar para o Strava.\n\nSe aparecer a mensagem 'Bad Request' no ecrã preto, é porque o domínio no painel do Strava não está igual a '"+currentDomain+"'.\n\nQuer prosseguir? (Cancele se precisar resetar as credenciais digitadas)")) {
+                    window.location.href = authUrl;
+                } else {
+                    localStorage.removeItem('strava_client_id');
+                    localStorage.removeItem('strava_client_secret');
+                    alert("Credenciais resetadas! Tente clicar em Conectar novamente.");
+                }
                 
             } else {
                 // Já conectado, fazer o Upload
@@ -318,15 +351,18 @@
 
                 const gpxString = generateGPXString();
                 const name = document.getElementById('activityName').value || 'Atividade Falsa';
+                const description = document.getElementById('activityDescription').value || '';
+                const isCommute = document.getElementById('isCommute').checked ? 'true' : 'false';
+                const isTrainer = document.getElementById('isTrainer').checked ? 'true' : 'false';
                 const visibility = document.getElementById('visibility').value || 'everyone';
                 
                 const formData = new FormData();
                 const blob = new Blob([gpxString], { type: 'application/gpx+xml' });
                 formData.append('file', blob, 'fakemyrun.gpx');
                 formData.append('name', name);
-                formData.append('description', 'Publicado via Fake My Run 🔥');
-                formData.append('trainer', 'false');
-                formData.append('commute', 'false');
+                formData.append('description', description);
+                formData.append('trainer', isTrainer);
+                formData.append('commute', isCommute);
                 formData.append('data_type', 'gpx');
                 formData.append('external_id', 'fakemyrun_' + Date.now() + '.gpx');
                 
@@ -558,6 +594,7 @@
             const baseCadence = parseInt(document.getElementById('cadence').value) || 165;
             const paceVariation = parseInt(document.getElementById('paceVariation').value) || 0;
             const hrVariation = parseInt(document.getElementById('hrVariation').value) || 0;
+            const hideHR = document.getElementById('hideHR').checked;
 
             if (!startTimeInput) return null;
 
@@ -626,7 +663,7 @@
                     lat: lat.toFixed(6),
                     lng: lng.toFixed(6),
                     ele: currentElevation.toFixed(1),
-                    hr: Math.round(displayHR),
+                    hr: hideHR ? null : Math.round(displayHR),
                     cad: Math.round(currentCad),
                     time: pointTime.toISOString()
                 });
@@ -667,9 +704,13 @@
         <ele>${p.ele}</ele>
         <time>${p.time}</time>
         <extensions>
-          <gpxtpx:TrackPointExtension>
-            <gpxtpx:hr>${p.hr}</gpxtpx:hr>
-            <gpxtpx:cad>${p.cad}</gpxtpx:cad>
+          <gpxtpx:TrackPointExtension>\n`;
+                
+                if (p.hr !== null) {
+                    gpx += `            <gpxtpx:hr>${p.hr}</gpxtpx:hr>\n`;
+                }
+                
+                gpx += `            <gpxtpx:cad>${p.cad}</gpxtpx:cad>
           </gpxtpx:TrackPointExtension>
         </extensions>
       </trkpt>\n`;
@@ -697,6 +738,5 @@
         }
     </script>
 </body>
-
 
 </html>
